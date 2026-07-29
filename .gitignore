@@ -1,0 +1,48 @@
+# Dart and pub
+**/.dart_tool/
+**/.packages
+**/.pub/
+**/build/
+**/doc/api/
+/packages/**/pubspec.lock
+
+# Compiler and generated output
+**/.dart2wasi/
+**/out/
+**/dist/
+*.dill
+*.snapshot
+*.aot
+*.wasm.map
+*.wasm.js
+
+# Tests and coverage
+coverage/
+**/coverage/
+test-results/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Editors and IDEs
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# Operating-system files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~

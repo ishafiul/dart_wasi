@@ -1,0 +1,13 @@
+name: dart_wasi
+description: Experimental guest API for Dart programs compiled to WASI.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+resolution: workspace
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.28.0
