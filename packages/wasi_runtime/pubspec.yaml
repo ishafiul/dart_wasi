@@ -1,6 +1,7 @@
 name: wasi_runtime
 description: Experimental Dart host for loading and running WASI workloads.
 version: 0.1.0
+publish_to: none
 repository: https://github.com/ishaf/wasi_runtime
 issue_tracker: https://github.com/ishaf/wasi_runtime/issues
 
@@ -11,7 +12,10 @@ resolution: workspace
 
 dependencies:
   crypto: ^3.0.7
-  wasd: ^0.3.0
+  wasd:
+    git:
+      url: https://github.com/ishafiul/wasd.git
+      ref: 576d206560ddf3d6d6244767230d9d5a352a3ce2
 
 dev_dependencies:
   lints: ^6.0.0

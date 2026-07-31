@@ -48,11 +48,9 @@ without leaking its types into the rest of the platform.
 - The old byte reader and module-envelope code and tests were removed.
 - A real WASI Preview 1 module importing `proc_exit` is exercised in tests and
   returns exit code 42 without terminating the Dart host.
-- `wasd` 0.3.0 writes Preview 1 stdout/stderr to host stdio and does not expose
-  injectable output sinks through its public API. Captured/bounded output is
-  therefore deferred to PRD 05/08 and must use a future public upstream API or
-  a stronger isolation boundary; this project will not import `package:wasd/src`
-  to work around it.
+- The pinned `wasd` `wasi-output-sinks` branch exposes public request-scoped
+  Preview 1 stdout/stderr byte sinks. `WasdEngine` captures them in
+  `WasiExecutionResult`; output bounds remain a later capability-policy task.
 - On the native backend, `wasd` 0.3.0 wraps host-callback exceptions in a
   private execution-trap type without a public typed cause. The adapter
   therefore preserves these as `WasmTrap`; a distinct `WasmHostException`

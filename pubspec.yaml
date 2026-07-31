@@ -11,6 +11,8 @@ workspace:
   - packages/wasi_runtime
 
 dependencies:
+  dart2wasi: any
+  dart_wasi: any
   wasi_runtime: any
 
 dev_dependencies:
