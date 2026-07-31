@@ -102,6 +102,8 @@ final class _WasdCompiledModule implements CompiledModule {
   Future<WasiExecutionResult> runWasi([
     WasiExecutionOptions options = const WasiExecutionOptions(),
   ]) async {
+    final stdout = BytesBuilder(copy: false);
+    final stderr = BytesBuilder(copy: false);
     final wasi = wasd.WASI(
       args: List.unmodifiable(options.arguments),
       env: Map.unmodifiable(options.environment),
@@ -109,6 +111,8 @@ final class _WasdCompiledModule implements CompiledModule {
       preopens: Map.unmodifiable(options.preopens),
       files: Map.unmodifiable(options.files),
       returnOnExit: true,
+      stdoutSink: stdout.add,
+      stderrSink: stderr.add,
       version: wasd.WASIVersion.preview1,
     );
 
@@ -117,7 +121,11 @@ final class _WasdCompiledModule implements CompiledModule {
         _module,
         wasi.imports,
       );
-      return WasiExecutionResult(exitCode: wasi.start(instance));
+      return WasiExecutionResult(
+        exitCode: wasi.start(instance),
+        stdout: stdout.toBytes(),
+        stderr: stderr.toBytes(),
+      );
     } on wasd.LinkError catch (error) {
       throw WasmLinkException(error.message, cause: error);
     } on wasd.RuntimeError catch (error) {

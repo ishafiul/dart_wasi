@@ -348,10 +348,11 @@ packages:
   wasd:
     dependency: transitive
     description:
-      name: wasd
-      sha256: "8fe9c923ec65cdb32d858abf0fd1e35fa14f130bcbbf686a4881477b87139efc"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: "576d206560ddf3d6d6244767230d9d5a352a3ce2"
+      resolved-ref: "576d206560ddf3d6d6244767230d9d5a352a3ce2"
+      url: "https://github.com/ishafiul/wasd.git"
+    source: git
     version: "0.3.0"
   watcher:
     dependency: transitive

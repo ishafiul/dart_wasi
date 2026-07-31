@@ -54,7 +54,8 @@ classes or guess by matching error-message text.
 In `wasd` 0.3.0:
 
 - Native host-function errors can be hidden inside a private trap wrapper.
-- WASI Preview 1 stdout and stderr do not have public injectable output sinks.
+- The pinned `wasd` output-sinks branch provides public request-scoped stdout
+  and stderr byte sinks, which `WasdEngine` captures without private imports.
 
 ## References
 

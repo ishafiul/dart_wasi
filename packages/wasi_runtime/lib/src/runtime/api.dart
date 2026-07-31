@@ -56,9 +56,19 @@ final class WasiExecutionOptions {
 
 /// Result of running a WASI Preview 1 command module.
 final class WasiExecutionResult {
-  const WasiExecutionResult({required this.exitCode});
+  const WasiExecutionResult({
+    required this.exitCode,
+    required this.stdout,
+    required this.stderr,
+  });
 
   final int exitCode;
+
+  /// Bytes written by the guest to WASI stdout.
+  final Uint8List stdout;
+
+  /// Bytes written by the guest to WASI stderr.
+  final Uint8List stderr;
 }
 
 /// Compiles WebAssembly binaries through a replaceable engine adapter.
