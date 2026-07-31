@@ -2,5 +2,5 @@
 
 Experimental guest-facing APIs for Dart programs compiled by `dart2wasi`.
 
-The API surface will be defined only after the compiler can generate and run a
-minimal WASI Preview 1 command module.
+The feasibility API provides `Wasi.stdout.write` for constant strings. It is a
+compiler-recognized API and is not executable on the Dart VM.
