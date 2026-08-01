@@ -9,6 +9,7 @@ void main() {
   test('compiler contract is public', () {
     const error = UnsupportedDartFeatureException('unsupported');
     expect(error.message, 'unsupported');
+    expect(supportedDartWasiGuestApiVersion, 1);
   });
 
   test(
@@ -18,7 +19,7 @@ void main() {
 import 'package:dart_wasi/dart_wasi.dart';
 
 void main() {
-  Wasi.stdout.write('Hello from Dart!\\n');
+  Wasi.stdout.write('Hello from Dart!\n');
 }
 ''');
       final engine = WasdEngine();
@@ -29,6 +30,7 @@ void main() {
       ];
 
       expect(bytes.take(8), [0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]);
+      expect(bytes, containsAll(utf8.encode('dart_wasi.sdk')));
       expect(
         module.imports.map((value) => '${value.module}.${value.name}'),
         expectedImports,
@@ -53,7 +55,7 @@ void main() {
     },
   );
 
-  test('rejects Dart outside the compiler feasibility subset', () {
+  test('rejects Dart outside the supported subset', () {
     expect(
       () => const MinimalDartToWasiCompiler().compileSource('''
 void main() async {
@@ -86,9 +88,9 @@ void main() {
     count = addOne(count);
   }
   if (count == 2 && true) {
-    Wasi.stdout.write('subset works\\n');
+    Wasi.stdout.write('subset works\n');
   } else {
-    Wasi.stdout.write('unexpected\\n');
+    Wasi.stdout.write('unexpected\n');
   }
 }
 ''');
@@ -99,4 +101,23 @@ void main() {
       expect(utf8.decode(result.stdout), 'subset works\n');
     },
   );
+
+  test('rejects ill-typed intrinsics before code generation', () {
+    expect(
+      () => const MinimalDartToWasiCompiler().compileSource('''
+import 'package:dart_wasi/dart_wasi.dart';
+
+void main() {
+  Wasi.stdout.writeBytes(42);
+}
+'''),
+      throwsA(
+        isA<UnsupportedDartFeatureException>().having(
+          (error) => error.message,
+          'message',
+          contains('writeBytes argument must be WasiBytes'),
+        ),
+      ),
+    );
+  });
 }
