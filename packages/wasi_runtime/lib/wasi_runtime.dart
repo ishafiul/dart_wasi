@@ -14,4 +14,5 @@ export 'src/http/dispatcher.dart';
 export 'src/http/models.dart';
 export 'src/http/protocol.dart';
 export 'src/http/server.dart';
+export 'src/observability/telemetry.dart';
 export 'src/runtime/api.dart';

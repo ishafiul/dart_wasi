@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../errors.dart';
 import '../execution/request_executor.dart';
 import '../execution/workload_executor.dart';
+import '../observability/telemetry.dart';
 import 'models.dart';
 import 'protocol.dart';
 
@@ -64,6 +65,7 @@ final class WasiHttpDispatcher {
   WasiHttpDispatcher({
     required WasiWorkloadExecutor executor,
     required Iterable<WasiHttpRoute> routes,
+    this.telemetry,
   }) : _executor = executor,
        _routes = List.unmodifiable(routes) {
     if (_routes.isEmpty) {
@@ -87,36 +89,83 @@ final class WasiHttpDispatcher {
   final WasiWorkloadExecutor _executor;
   final List<WasiHttpRoute> _routes;
   final Map<String, _WorkloadLimiter> _limiters = {};
+  final WasiTelemetry? telemetry;
 
   Future<WasiHttpResponse> dispatch({
     required String hostname,
     required WasiHttpRequest request,
     Duration? timeout,
     WasiRequestCancellation? cancellation,
+    String? correlationId,
   }) async {
-    final route = _routes.cast<WasiHttpRoute?>().firstWhere(
-      (candidate) => candidate!.matches(hostname, request.path),
-      orElse: () => null,
-    );
-    if (route == null) {
-      return _emptyResponse(404);
-    }
-
-    final limiter = _limiters[route.workloadName]!;
-    if (!limiter.tryAcquire()) {
-      return _emptyResponse(503);
-    }
+    final requestId = correlationId ?? telemetry?.createCorrelationId() ?? '';
+    final stopwatch = Stopwatch()..start();
+    Object? failure;
     try {
-      final result = await _executor.execute(
-        route.workloadName,
-        WasiRequest(stdin: WasiHttpProtocol.encodeRequest(request)),
-        timeout: timeout,
-        cancellation: cancellation,
+      final route = _routes.cast<WasiHttpRoute?>().firstWhere(
+        (candidate) => candidate!.matches(hostname, request.path),
+        orElse: () => null,
       );
-      return _toHttpResponse(result.request);
+      if (route == null) {
+        return _emptyResponse(404);
+      }
+
+      final limiter = _limiters[route.workloadName]!;
+      if (!limiter.tryAcquire()) {
+        return _emptyResponse(503);
+      }
+      try {
+        final result = await _executor.execute(
+          route.workloadName,
+          WasiRequest(stdin: WasiHttpProtocol.encodeRequest(request)),
+          timeout: timeout,
+          cancellation: cancellation,
+          correlationId: requestId,
+        );
+        return _toHttpResponse(result.request);
+      } finally {
+        limiter.release();
+      }
+    } on Object catch (error) {
+      failure = error;
+      rethrow;
     } finally {
-      limiter.release();
+      stopwatch.stop();
+      _recordRoute(
+        requestId,
+        stopwatch,
+        succeeded: failure == null,
+        failure: failure,
+      );
     }
+  }
+
+  void _recordRoute(
+    String correlationId,
+    Stopwatch stopwatch, {
+    required bool succeeded,
+    Object? failure,
+  }) {
+    if (correlationId.isEmpty) {
+      return;
+    }
+    telemetry?.recordEvent(
+      WasiLifecycleEvent(
+        correlationId: correlationId,
+        stage: WasiLifecycleStage.route,
+        elapsed: stopwatch.elapsed,
+        succeeded: succeeded,
+        failureKind: failure == null ? null : classifyWasiFailure(failure),
+      ),
+    );
+    telemetry?.recordMetric(
+      WasiMetric(
+        name: 'route.duration_ms',
+        value:
+            stopwatch.elapsedMicroseconds / Duration.microsecondsPerMillisecond,
+        correlationId: correlationId,
+      ),
+    );
   }
 
   WasiHttpResponse _toHttpResponse(WasiRequestResult result) {
