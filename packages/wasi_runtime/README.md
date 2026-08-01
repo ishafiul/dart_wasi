@@ -26,3 +26,14 @@ revision before execution and exposes `drain` so a newly activated or rolled
 back revision can take traffic while requests on the previous revision finish.
 Every execution still delegates to `WasiRequestExecutor`, so no request-scoped
 WASI state is shared through the cache.
+
+## Local host CLI
+
+Inspect a module, run a Preview 1 command module, or locally serve an HTTP
+worker. `serve` uses an in-memory revision for local development only.
+
+```shell
+dart run dart_wasi_host inspect worker.wasm
+dart run dart_wasi_host run worker.wasm
+dart run dart_wasi_host serve worker.wasm --host localhost --port 8080
+```

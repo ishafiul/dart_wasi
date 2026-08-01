@@ -8,6 +8,7 @@ environment:
 workspace:
   - packages/dart2wasi
   - packages/dart_wasi
+  - packages/dart_wasi_host
   - packages/wasi_runtime
 
 dependencies:
