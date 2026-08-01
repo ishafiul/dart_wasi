@@ -69,9 +69,17 @@ final class _SubsetParser {
       _usesGuestSdk = true;
       return _Type.bytesType;
     }
+    if (_match('WasiHttpRequest')) {
+      _usesGuestSdk = true;
+      return _Type.httpRequestType;
+    }
+    if (_match('WasiHttpResponse')) {
+      _usesGuestSdk = true;
+      return _Type.httpResponseType;
+    }
     final supported = allowVoid
-        ? 'void, int, bool, or WasiBytes'
-        : 'int, bool, or WasiBytes';
+        ? 'void, int, bool, WasiBytes, WasiHttpRequest, or WasiHttpResponse'
+        : 'int, bool, WasiBytes, WasiHttpRequest, or WasiHttpResponse';
     _unsupported('Expected a supported type ($supported).');
   }
 
@@ -164,13 +172,19 @@ final class _SubsetParser {
     if (_check('Wasi')) {
       return _wasiExpression();
     }
+    if (_check('WasiHttpResponse')) {
+      return _httpResponseExpression();
+    }
     if (_peek().kind == _TokenKind.identifier) {
       final name = _advance().lexeme;
+      late _Expression expression;
       if (_match('(')) {
         final arguments = _expressionArguments();
-        return _CallExpression(name, arguments);
+        expression = _CallExpression(name, arguments);
+      } else {
+        expression = _VariableExpression(name);
       }
-      return _VariableExpression(name);
+      return _postfix(expression);
     }
     if (_match('(')) {
       final value = _expression();
@@ -178,6 +192,49 @@ final class _SubsetParser {
       return value;
     }
     _unsupported('Expected an expression near "${_peek().lexeme}".');
+  }
+
+  _Expression _postfix(_Expression receiver) {
+    var expression = receiver;
+    while (_match('.')) {
+      final member = _consumeIdentifier();
+      final arguments = _match('(') ? _expressionArguments() : null;
+      expression = _MemberExpression(expression, member, arguments);
+    }
+    return expression;
+  }
+
+  _Expression _httpResponseExpression() {
+    _usesGuestSdk = true;
+    _expect('WasiHttpResponse');
+    _expect('.');
+    final factory = _consumeIdentifier();
+    _expect('(');
+    final status = _expression();
+    _expect(',');
+    if (factory == 'json' || factory == 'text') {
+      final body = _consumeString();
+      _expectClosingParenthesis();
+      return _IntrinsicExpression(
+        factory == 'json'
+            ? _WasiIntrinsic.httpResponseJson
+            : _WasiIntrinsic.httpResponseText,
+        arguments: [status],
+        stringArguments: [body],
+      );
+    }
+    if (factory == 'binary') {
+      final body = _expression();
+      _expect(',');
+      final contentType = _consumeString();
+      _expectClosingParenthesis();
+      return _IntrinsicExpression(
+        _WasiIntrinsic.httpResponseBinary,
+        arguments: [status, body],
+        stringArguments: [contentType],
+      );
+    }
+    _unsupported('Unsupported guest API WasiHttpResponse.$factory.');
   }
 
   _Expression _wasiExpression() {

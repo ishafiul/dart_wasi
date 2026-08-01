@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dart2wasi/dart2wasi.dart';
 import 'package:test/test.dart';
+import 'package:wasi_runtime/wasi_runtime.dart';
 
 import 'support/guest_fixture.dart';
 
@@ -71,6 +72,50 @@ void main() {
       expect(exitCode, 0);
       expect(stdout, input);
       expect(stderr, isEmpty);
+    },
+    skip: wasmtimeAvailable
+        ? false
+        : 'Wasmtime is not installed locally; CI installs and runs it.',
+  );
+
+  test(
+    'HTTP worker exchanges versioned envelopes through Wasmtime',
+    () async {
+      final outputDirectory = await Directory.systemTemp.createTemp(
+        'dart2wasi-wasmtime-http-',
+      );
+      addTearDown(() => outputDirectory.delete(recursive: true));
+
+      final wasmFile = File('${outputDirectory.path}/http.wasm');
+      final bytes = await const MinimalDartToWasiCompiler().compile(
+        guestFixtureUri('http_json'),
+      );
+      await wasmFile.writeAsBytes(bytes);
+
+      final process = await Process.start('wasmtime', [wasmFile.path]);
+      final stdoutFuture = process.stdout.fold<List<int>>(
+        <int>[],
+        (bytes, chunk) => bytes..addAll(chunk),
+      );
+      final stderrFuture = process.stderr.fold<List<int>>(
+        <int>[],
+        (bytes, chunk) => bytes..addAll(chunk),
+      );
+      process.stdin.add(
+        WasiHttpProtocol.encodeRequest(
+          WasiHttpRequest(method: 'GET', path: '/hello'),
+        ),
+      );
+      await process.stdin.close();
+
+      final exitCode = await process.exitCode;
+      final response = WasiHttpProtocol.decodeResponse(await stdoutFuture);
+      final stderr = await stderrFuture;
+
+      expect(exitCode, 0);
+      expect(response.status, 200);
+      expect(response.header('content-type'), 'application/json');
+      expect(stderr, 'handled request\n'.codeUnits);
     },
     skip: wasmtimeAvailable
         ? false

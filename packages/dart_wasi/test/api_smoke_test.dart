@@ -6,6 +6,7 @@ void main() {
     test('exposes the supported version and runtime error status', () {
       expect(dartWasiGuestApiVersion, 1);
       expect(dartWasiGuestRuntimeErrorExitCode, 70);
+      expect(dartWasiHttpProtocolVersion, 1);
     });
 
     test('exposes only the explicit guest service objects', () {
@@ -28,6 +29,8 @@ void main() {
         throwsUnsupportedError,
       );
       expect(() => Wasi.exit(1), throwsUnsupportedError);
+      expect(() => WasiHttpResponse.json(200, '{}'), throwsUnsupportedError);
+      expect(() => WasiHttpResponse.text(200, 'hello'), throwsUnsupportedError);
     });
   });
 }

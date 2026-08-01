@@ -5,4 +5,7 @@ export 'src/artifacts/registry.dart';
 export 'src/artifacts/repository.dart';
 export 'src/engine/wasd_engine.dart';
 export 'src/errors.dart';
+export 'src/http/executor.dart';
+export 'src/http/models.dart';
+export 'src/http/protocol.dart';
 export 'src/runtime/api.dart';

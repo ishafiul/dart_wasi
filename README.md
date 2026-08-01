@@ -26,10 +26,11 @@ compiler, runtime, or platform.
 
 The compiler supports a deliberately restricted Dart subset with typed
 integers, booleans, opaque runtime bytes, direct functions, branches, loops,
-stdout, stderr, bounded stdin, arguments, environment lookup, and exit. It
-emits standard WASI Preview 1 command modules and imports only the capabilities
-used by each guest. The host can validate, inspect, version, and execute those
-modules with request-scoped input and captured output.
+stdout, stderr, bounded stdin, arguments, environment lookup, exit, and a
+versioned HTTP `fetch` entrypoint. It emits standard WASI Preview 1 command
+modules and imports only the capabilities used by each guest. The host can
+validate, inspect, version, and execute those modules with request-scoped input
+and captured output.
 
 ```shell
 dart run dart2wasi examples/hello.dart /tmp/hello.wasm
@@ -40,11 +41,14 @@ dart run dart2wasi examples/subset.dart /tmp/subset.wasm
 dart run examples/run_wasm.dart /tmp/subset.wasm
 
 dart run examples/run_guest_io.dart
+dart run examples/run_http_worker.dart
 ```
 
 `examples/run_guest_io.dart` demonstrates arguments, environment, stdin,
 stdout, and stderr together. `examples/run_wasm.dart` runs an existing artifact
 with empty host inputs and writes captured guest output before the exit code.
+`examples/run_http_worker.dart` compiles a Dart `fetch` handler, sends a
+versioned request envelope through WASI, and decodes its JSON response.
 
 ## Intended result
 

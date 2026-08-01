@@ -5,7 +5,8 @@ standard WASI Preview 1 command module.
 
 The supported language subset includes:
 
-- `void`, `int`, `bool`, and opaque `WasiBytes` values.
+- `void`, `int`, `bool`, opaque `WasiBytes`, and the HTTP request/response
+  handles.
 - Typed locals and parameters.
 - Direct declared-function calls.
 - Integer arithmetic and comparisons.
@@ -21,6 +22,12 @@ The version 1 `dart_wasi` contract supports stdout, stderr, bounded stdin,
 arguments, environment lookup, and exit. Generated modules import only the
 WASI Preview 1 capabilities used by the source and record SDK version 1 in the
 `dart_wasi.sdk` custom section.
+
+HTTP workers declare
+`WasiHttpResponse fetch(WasiHttpRequest request)` instead of `void main()`.
+The compiler generates a bounded version 1 request decoder and response
+encoder over WASI stdin/stdout. Direct stdin/stdout access is rejected for
+these workers; stderr remains available for diagnostics.
 
 Compile a guest with:
 

@@ -10,6 +10,7 @@ part 'compiler/model.dart';
 part 'compiler/parser.dart';
 part 'compiler/semantic_validator.dart';
 part 'compiler/wasm_encoder.dart';
+part 'compiler/http_lowering.dart';
 part 'compiler/wasm_module_writer.dart';
 
 /// Guest SDK version understood by this compiler.
@@ -35,7 +36,7 @@ final class MinimalDartToWasiCompiler implements DartToWasiCompiler {
     return compileSource(await File.fromUri(entrypoint).readAsString());
   }
 
-  /// Compiles [source] using the supported PRD 4 and PRD 5 guest subset.
+  /// Compiles [source] using the supported Dart WASI guest subset.
   Uint8List compileSource(String source) {
     final program = _SubsetParser(source).parse();
     final semantics = _SemanticValidator(program).validate();
