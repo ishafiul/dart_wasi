@@ -17,12 +17,25 @@ final class WorkloadExecutionResult {
   final WasiRequestResult request;
 }
 
+/// Executes an active workload with request-scoped WASI options.
+///
+/// The interface keeps host transports, such as HTTP, independent from the
+/// registry and compilation-cache implementation.
+abstract interface class WasiWorkloadExecutor {
+  Future<WorkloadExecutionResult> execute(
+    String workloadName,
+    WasiRequest request, {
+    Duration? timeout,
+    WasiRequestCancellation? cancellation,
+  });
+}
+
 /// Executes active workload revisions through a shared compilation cache.
 ///
 /// The active revision is read before compilation begins. Activating or
 /// rolling back later requests therefore cannot interrupt an in-flight request
 /// or change the revision it is already draining.
-final class WorkloadExecutor {
+final class WorkloadExecutor implements WasiWorkloadExecutor {
   WorkloadExecutor({
     required WorkloadRegistry registry,
     required CompiledModuleCache cache,
@@ -33,6 +46,7 @@ final class WorkloadExecutor {
   final CompiledModuleCache _cache;
   final Map<_RevisionKey, _DrainState> _draining = {};
 
+  @override
   Future<WorkloadExecutionResult> execute(
     String workloadName,
     WasiRequest request, {
