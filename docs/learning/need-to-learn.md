@@ -176,5 +176,25 @@ the earlier steps.
 28. [`28-wasm-codegen-and-wasi-lowering.md`](28-wasm-codegen-and-wasi-lowering.md)
     — generating core Wasm and lowering guest operations to WASI calls.
 
-Later learning notes should continue at step 29. Do not insert a later PRD topic
+### Guest SDK concepts required for PRD 5
+
+29. [`29-guest-sdk-and-intrinsics.md`](29-guest-sdk-and-intrinsics.md) — the
+    versioned contract between guest source, compiler lowering, and host
+    imports.
+30. [`30-runtime-text-and-bytes.md`](30-runtime-text-and-bytes.md) — runtime
+    byte/text representation, UTF-8 policy, ownership, and supported behavior.
+31. [`31-guest-memory-layout.md`](31-guest-memory-layout.md) — safe regions,
+    allocation, alignment, bounds, growth, and lifetime.
+32. [`32-wasi-descriptor-io.md`](32-wasi-descriptor-io.md) — `fd_read`,
+    `fd_write`, iovecs, partial operations, EOF, and errno.
+33. [`33-wasi-arguments.md`](33-wasi-arguments.md) — argument size discovery,
+    pointer arrays, byte buffers, limits, and indexed access.
+34. [`34-wasi-environment.md`](34-wasi-environment.md) — environment memory
+    layout, `KEY=value` parsing, lookup, limits, and malformed data.
+35. [`35-exit-and-guest-errors.md`](35-exit-and-guest-errors.md) — non-returning
+    exit, errno policy, traps, diagnostics, and VM behavior.
+36. [`36-prd5-conformance-fixtures.md`](36-prd5-conformance-fixtures.md) —
+    layered Hello, stderr, echo, argument, environment, and exit verification.
+
+Later learning notes should continue at step 37. Do not insert a later PRD topic
 before its prerequisites merely because its implementation is scheduled next.
