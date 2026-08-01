@@ -119,3 +119,8 @@ final class NoRollbackTargetException extends WorkloadException {
   NoRollbackTargetException(String workloadName)
     : super('Workload "$workloadName" has no previous active revision.');
 }
+
+final class NoActiveRevisionException extends WorkloadException {
+  NoActiveRevisionException(String workloadName)
+    : super('Workload "$workloadName" has no active revision.');
+}
