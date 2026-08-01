@@ -1,6 +1,14 @@
 part of '../compiler.dart';
 
-enum _Type { voidType, intType, boolType, bytesType, neverType }
+enum _Type {
+  voidType,
+  intType,
+  boolType,
+  bytesType,
+  httpRequestType,
+  httpResponseType,
+  neverType,
+}
 
 final class _Program {
   const _Program(this.functions);
@@ -95,6 +103,16 @@ final class _CallExpression extends _Expression {
   final List<_Expression> arguments;
 }
 
+final class _MemberExpression extends _Expression {
+  _MemberExpression(this.receiver, this.member, this.arguments);
+
+  final _Expression receiver;
+  final String member;
+
+  /// Null for a property access and non-null for a method invocation.
+  final List<_Expression>? arguments;
+}
+
 final class _UnaryExpression extends _Expression {
   _UnaryExpression(this.operator, this.value);
 
@@ -120,6 +138,9 @@ enum _WasiIntrinsic {
   argumentAt,
   environmentContains,
   environmentValueOr,
+  httpResponseJson,
+  httpResponseText,
+  httpResponseBinary,
   exit,
 }
 

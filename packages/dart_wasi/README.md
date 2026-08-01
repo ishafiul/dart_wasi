@@ -10,6 +10,8 @@ The version 1 API supports:
 - Argument count and indexed argument access.
 - Environment lookup with an explicit fallback.
 - Exit statuses from 0 through 255.
+- A versioned HTTP `fetch` entrypoint with request metadata and JSON, text, or
+  binary responses.
 
 `WasiBytes` is an opaque pointer-and-length value owned by one guest execution.
 It may be stored, passed to supported functions, returned, and written. It does
@@ -23,3 +25,14 @@ indexes, limits, malformed host data, or invalid dynamic exit statuses use
 
 All guest operations are compiler intrinsics. Calling them on the normal Dart
 VM throws `UnsupportedError`.
+
+An HTTP worker uses this exact entrypoint:
+
+```dart
+WasiHttpResponse fetch(WasiHttpRequest request) {
+  return WasiHttpResponse.json(200, '{"ok":true}');
+}
+```
+
+HTTP workers reserve stdin/stdout for version 1 protocol envelopes and use
+stderr for diagnostics.

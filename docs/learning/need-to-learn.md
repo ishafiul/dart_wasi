@@ -196,5 +196,11 @@ the earlier steps.
 36. [`36-prd5-conformance-fixtures.md`](36-prd5-conformance-fixtures.md) —
     layered Hello, stderr, echo, argument, environment, and exit verification.
 
-Later learning notes should continue at step 37. Do not insert a later PRD topic
+### HTTP protocol concepts required for PRD 6
+
+37. [`37-http-over-wasi-envelopes.md`](37-http-over-wasi-envelopes.md) —
+    versioned bounded request/response envelopes, the generated `fetch`
+    adapter, and the stdin/stdout/stderr transport split.
+
+Later learning notes should continue at step 38. Do not insert a later PRD topic
 before its prerequisites merely because its implementation is scheduled next.

@@ -39,6 +39,34 @@ final class WasmHostException extends WasmException {
   const WasmHostException(super.message, {super.cause});
 }
 
+/// A request or response does not satisfy the HTTP-over-WASI wire contract.
+final class WasiHttpProtocolException implements Exception {
+  const WasiHttpProtocolException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'WasiHttpProtocolException: $message';
+}
+
+/// A WASI HTTP worker exited before producing a successful response.
+final class WasiHttpExecutionException implements Exception {
+  const WasiHttpExecutionException({
+    required this.exitCode,
+    required this.stderr,
+  });
+
+  final int exitCode;
+  final String stderr;
+
+  @override
+  String toString() {
+    final diagnostic = stderr.isEmpty ? '' : ' Guest stderr: $stderr';
+    return 'WasiHttpExecutionException: HTTP guest exited with status '
+        '$exitCode.$diagnostic';
+  }
+}
+
 /// Base class for artifact and workload-registry failures.
 abstract class WorkloadException implements Exception {
   const WorkloadException(this.message);

@@ -4,6 +4,9 @@ const int dartWasiGuestApiVersion = 1;
 /// Exit status used when the guest SDK detects invalid runtime data or limits.
 const int dartWasiGuestRuntimeErrorExitCode = 70;
 
+/// Version of the HTTP request/response envelope carried on stdin/stdout.
+const int dartWasiHttpProtocolVersion = 1;
+
 const String _compilerOnlyMessage =
     'This API can only run in a dart2wasi-compiled guest.';
 
@@ -31,6 +34,55 @@ abstract final class Wasi {
 /// string operations.
 final class WasiBytes {
   const WasiBytes._();
+}
+
+/// HTTP request decoded by a generated `fetch` entry-point adapter.
+///
+/// Text fields remain opaque UTF-8 bytes because the experimental compiler
+/// does not provide general runtime `String` operations.
+final class WasiHttpRequest {
+  const WasiHttpRequest._();
+
+  WasiBytes get method => throw UnsupportedError(_compilerOnlyMessage);
+  WasiBytes get path => throw UnsupportedError(_compilerOnlyMessage);
+  WasiBytes get query => throw UnsupportedError(_compilerOnlyMessage);
+  WasiBytes get body => throw UnsupportedError(_compilerOnlyMessage);
+  int get headerCount => throw UnsupportedError(_compilerOnlyMessage);
+
+  WasiBytes headerNameAt(int index) {
+    throw UnsupportedError(_compilerOnlyMessage);
+  }
+
+  WasiBytes headerValueAt(int index) {
+    throw UnsupportedError(_compilerOnlyMessage);
+  }
+}
+
+/// HTTP response returned by a supported guest `fetch` function.
+final class WasiHttpResponse {
+  const WasiHttpResponse._();
+
+  /// Creates a UTF-8 JSON response with `application/json` content type.
+  static WasiHttpResponse json(int status, String body) {
+    throw UnsupportedError(_compilerOnlyMessage);
+  }
+
+  /// Creates a UTF-8 text response with `text/plain; charset=utf-8` content
+  /// type.
+  static WasiHttpResponse text(int status, String body) {
+    throw UnsupportedError(_compilerOnlyMessage);
+  }
+
+  /// Creates a response that preserves [body] bytes exactly.
+  ///
+  /// [contentType] must be a compile-time UTF-8 string literal.
+  static WasiHttpResponse binary(
+    int status,
+    WasiBytes body,
+    String contentType,
+  ) {
+    throw UnsupportedError(_compilerOnlyMessage);
+  }
 }
 
 /// Standard output or standard error available to a WASI guest.

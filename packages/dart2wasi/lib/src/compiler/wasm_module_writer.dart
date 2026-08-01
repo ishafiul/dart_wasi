@@ -19,12 +19,25 @@ const String _findEnvironmentFunction = r'$_wasiFindEnvironment';
 const String _environmentContainsFunction = r'$_wasiEnvironmentContains';
 const String _environmentValueOrFunction = r'$_wasiEnvironmentValueOr';
 const String _checkedExitFunction = r'$_wasiCheckedExit';
+const String _httpValidateRequestFunction = r'$_httpValidateRequest';
+const String _httpRequestMethodFunction = r'$_httpRequestMethod';
+const String _httpRequestPathFunction = r'$_httpRequestPath';
+const String _httpRequestQueryFunction = r'$_httpRequestQuery';
+const String _httpRequestBodyFunction = r'$_httpRequestBody';
+const String _httpHeaderNameAtFunction = r'$_httpHeaderNameAt';
+const String _httpHeaderValueAtFunction = r'$_httpHeaderValueAt';
+const String _httpHeaderAtFunction = r'$_httpHeaderAt';
+const String _httpCreateResponseFunction = r'$_httpCreateResponse';
+const String _httpWriteResponseFunction = r'$_httpWriteResponse';
 
 abstract final class _GuestMemory {
   static const int ioVector = 0;
   static const int ioCount = 8;
   static const int vectorCount = 12;
   static const int vectorBytes = 16;
+
+  static const int httpResponseRecord = 64;
+  static const int httpResponsePrefix = 96;
 
   static const int staticDataStart = 256;
   static const int staticDataLimit = 8192;
@@ -129,7 +142,14 @@ final class _WasiModuleWriter {
       locals: const [],
       buildBody: (layout) {
         final code = _Instructions();
-        code.call(layout.functionIndex('main'));
+        if (_semantics.httpEntrypoint) {
+          code.call(layout.functionIndex(_readAllFunction));
+          code.call(layout.functionIndex(_httpValidateRequestFunction));
+          code.call(layout.functionIndex('fetch'));
+          code.call(layout.functionIndex(_httpWriteResponseFunction));
+        } else {
+          code.call(layout.functionIndex('main'));
+        }
         code.i32Const(0);
         code.call(layout.functionIndex(_procExitImport));
         code.unreachable();
@@ -149,6 +169,7 @@ final class _WasiModuleWriter {
       if (_usage.checksEnvironment) _buildEnvironmentContainsFunction(),
       if (_usage.readsEnvironmentValue) _buildEnvironmentValueOrFunction(),
       if (_usage.exits) _buildCheckedExitFunction(),
+      if (_usage.httpWorker) ..._buildHttpRuntimeFunctions(),
     ];
   }
 
@@ -831,23 +852,30 @@ final class _WasiModuleWriter {
 }
 
 final class _WasiUsage {
-  _WasiUsage.fromProgram(_Program program) {
+  _WasiUsage.fromProgram(_Program program)
+    : httpWorker = program.functions.any(
+        (function) => function.name == 'fetch',
+      ) {
     for (final function in program.functions) {
       _visitStatements(function.body);
     }
   }
 
   final Set<_WasiIntrinsic> intrinsics = {};
+  final bool httpWorker;
 
-  bool get writes => intrinsics.any(
-    const {
-      _WasiIntrinsic.stdoutWriteConstant,
-      _WasiIntrinsic.stdoutWriteBytes,
-      _WasiIntrinsic.stderrWriteConstant,
-      _WasiIntrinsic.stderrWriteBytes,
-    }.contains,
-  );
-  bool get readsStdin => intrinsics.contains(_WasiIntrinsic.stdinReadAll);
+  bool get writes =>
+      httpWorker ||
+      intrinsics.any(
+        const {
+          _WasiIntrinsic.stdoutWriteConstant,
+          _WasiIntrinsic.stdoutWriteBytes,
+          _WasiIntrinsic.stderrWriteConstant,
+          _WasiIntrinsic.stderrWriteBytes,
+        }.contains,
+      );
+  bool get readsStdin =>
+      httpWorker || intrinsics.contains(_WasiIntrinsic.stdinReadAll);
   bool get readsArguments =>
       readsArgumentValue || intrinsics.contains(_WasiIntrinsic.argumentsLength);
   bool get readsArgumentValue => intrinsics.contains(_WasiIntrinsic.argumentAt);
@@ -889,6 +917,13 @@ final class _WasiUsage {
       case _CallExpression(:final arguments):
         for (final argument in arguments) {
           _visitExpression(argument);
+        }
+      case _MemberExpression(:final receiver, :final arguments):
+        _visitExpression(receiver);
+        if (arguments != null) {
+          for (final argument in arguments) {
+            _visitExpression(argument);
+          }
         }
       case _UnaryExpression(:final value):
         _visitExpression(value);
@@ -997,6 +1032,13 @@ final class _StaticDataPool {
         for (final argument in arguments) {
           _visitExpression(argument);
         }
+      case _MemberExpression(:final receiver, :final arguments):
+        _visitExpression(receiver);
+        if (arguments != null) {
+          for (final argument in arguments) {
+            _visitExpression(argument);
+          }
+        }
       case _UnaryExpression(:final value):
         _visitExpression(value);
       case _BinaryExpression(:final left, :final right):
@@ -1010,6 +1052,13 @@ final class _StaticDataPool {
         if (intrinsic == _WasiIntrinsic.environmentContains ||
             intrinsic == _WasiIntrinsic.environmentValueOr) {
           _validateEnvironmentName(stringArguments.first);
+        }
+        if (intrinsic == _WasiIntrinsic.httpResponseJson) {
+          _add('application/json');
+        } else if (intrinsic == _WasiIntrinsic.httpResponseText) {
+          _add('text/plain; charset=utf-8');
+        } else if (intrinsic == _WasiIntrinsic.httpResponseBinary) {
+          _validateHttpContentType(stringArguments.single);
         }
         for (final value in stringArguments) {
           _add(value);
@@ -1026,6 +1075,21 @@ final class _StaticDataPool {
     if (name.isEmpty || name.contains('=') || name.contains('\u0000')) {
       _unsupported(
         'Environment names must be non-empty and cannot contain = or NUL.',
+      );
+    }
+  }
+
+  void _validateHttpContentType(String value) {
+    final byteLength = utf8.encode(value).length;
+    if (byteLength == 0 ||
+        byteLength > _HttpWire.maximumResponseContentTypeBytes ||
+        value.contains('\r') ||
+        value.contains('\n') ||
+        value.contains('\u0000')) {
+      _unsupported(
+        'HTTP content type must contain 1 through '
+        '${_HttpWire.maximumResponseContentTypeBytes} UTF-8 bytes and cannot '
+        'contain CR, LF, or NUL.',
       );
     }
   }
@@ -1114,6 +1178,8 @@ final class _UserFunctionWriter {
           _writeExpression(code, argument);
         }
         code.call(layout.functionIndex(name));
+      case _MemberExpression():
+        _writeMember(code, expression);
       case _UnaryExpression(:final operator, :final value):
         if (operator == '-') {
           code.i32Const(0);
@@ -1128,6 +1194,30 @@ final class _UserFunctionWriter {
         _writeBinary(code, left, operator, right);
       case _IntrinsicExpression():
         _writeIntrinsic(code, expression);
+    }
+  }
+
+  void _writeMember(_Instructions code, _MemberExpression expression) {
+    _writeExpression(code, expression.receiver);
+    switch (expression.member) {
+      case 'method':
+        code.call(layout.functionIndex(_httpRequestMethodFunction));
+      case 'path':
+        code.call(layout.functionIndex(_httpRequestPathFunction));
+      case 'query':
+        code.call(layout.functionIndex(_httpRequestQueryFunction));
+      case 'body':
+        code.call(layout.functionIndex(_httpRequestBodyFunction));
+      case 'headerCount':
+        code.i32Load(offset: _HttpWire.requestHeaderCountOffset);
+      case 'headerNameAt':
+        _writeExpression(code, expression.arguments!.single);
+        code.call(layout.functionIndex(_httpHeaderNameAtFunction));
+      case 'headerValueAt':
+        _writeExpression(code, expression.arguments!.single);
+        code.call(layout.functionIndex(_httpHeaderValueAtFunction));
+      default:
+        _unsupported('Internal compiler error: unknown request member.');
     }
   }
 
@@ -1207,11 +1297,49 @@ final class _UserFunctionWriter {
         _writeStaticBytes(code, expression.stringArguments[0]);
         _writeStaticBytes(code, expression.stringArguments[1]);
         code.call(layout.functionIndex(_environmentValueOrFunction));
+      case _WasiIntrinsic.httpResponseJson:
+        _writeHttpResponse(
+          code,
+          status: expression.arguments.single,
+          contentType: 'application/json',
+          bodyText: expression.stringArguments.single,
+        );
+      case _WasiIntrinsic.httpResponseText:
+        _writeHttpResponse(
+          code,
+          status: expression.arguments.single,
+          contentType: 'text/plain; charset=utf-8',
+          bodyText: expression.stringArguments.single,
+        );
+      case _WasiIntrinsic.httpResponseBinary:
+        _writeHttpResponse(
+          code,
+          status: expression.arguments[0],
+          contentType: expression.stringArguments.single,
+          body: expression.arguments[1],
+        );
       case _WasiIntrinsic.exit:
         _writeExpression(code, expression.arguments.single);
         code.call(layout.functionIndex(_checkedExitFunction));
         code.unreachable();
     }
+  }
+
+  void _writeHttpResponse(
+    _Instructions code, {
+    required _Expression status,
+    required String contentType,
+    String? bodyText,
+    _Expression? body,
+  }) {
+    _writeExpression(code, status);
+    _writeStaticBytes(code, contentType);
+    if (bodyText != null) {
+      _writeStaticBytes(code, bodyText);
+    } else {
+      _writeExpression(code, body!);
+    }
+    code.call(layout.functionIndex(_httpCreateResponseFunction));
   }
 
   void _writeConstant(_Instructions code, int descriptor, String value) {
@@ -1242,6 +1370,10 @@ final class _UserFunctionWriter {
     _BooleanExpression() => _Type.boolType,
     _VariableExpression(:final name) => semantics.localTypes[name]!,
     _CallExpression(:final name) => _functions[name]!.returnType,
+    _MemberExpression(:final member) => switch (member) {
+      'headerCount' => _Type.intType,
+      _ => _Type.bytesType,
+    },
     _UnaryExpression(operator: '!') => _Type.boolType,
     _UnaryExpression() => _Type.intType,
     _BinaryExpression(operator: '==' || '!=' || '<' || '>' || '<=' || '>=') =>
@@ -1258,6 +1390,9 @@ final class _UserFunctionWriter {
       _WasiIntrinsic.environmentValueOr => _Type.bytesType,
       _WasiIntrinsic.argumentsLength => _Type.intType,
       _WasiIntrinsic.environmentContains => _Type.boolType,
+      _WasiIntrinsic.httpResponseJson ||
+      _WasiIntrinsic.httpResponseText ||
+      _WasiIntrinsic.httpResponseBinary => _Type.httpResponseType,
       _WasiIntrinsic.exit => _Type.neverType,
     },
   };

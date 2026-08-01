@@ -113,8 +113,18 @@ final class _Instructions {
   ]);
   void i32Load8Unsigned({int offset = 0}) =>
       bytes.addAll([0x2d, 0, ..._unsignedLeb128(offset)]);
+  void i64Load({int alignment = 3, int offset = 0}) => bytes.addAll([
+    0x29,
+    ..._unsignedLeb128(alignment),
+    ..._unsignedLeb128(offset),
+  ]);
   void i32Store({int alignment = 2, int offset = 0}) => bytes.addAll([
     0x36,
+    ..._unsignedLeb128(alignment),
+    ..._unsignedLeb128(offset),
+  ]);
+  void i64Store({int alignment = 3, int offset = 0}) => bytes.addAll([
+    0x37,
     ..._unsignedLeb128(alignment),
     ..._unsignedLeb128(offset),
   ]);
@@ -202,7 +212,10 @@ List<int> _signedLeb128(int value) {
 }
 
 _WasmValueType _wasmValueType(_Type type) => switch (type) {
-  _Type.intType || _Type.boolType => _WasmValueType.i32,
+  _Type.intType ||
+  _Type.boolType ||
+  _Type.httpRequestType ||
+  _Type.httpResponseType => _WasmValueType.i32,
   _Type.bytesType => _WasmValueType.i64,
   _Type.voidType || _Type.neverType => _unsupported(
     'Internal compiler error: $type has no Wasm value type.',
