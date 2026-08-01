@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 
 import '../errors.dart';
 import '../execution/capability_policy.dart';
+import '../observability/telemetry.dart';
 import '../runtime/api.dart';
 import 'models.dart';
 import 'repository.dart';
@@ -17,6 +18,7 @@ final class WorkloadRegistry {
     required WorkloadRepository repository,
     this.maximumArtifactBytes = 10 * 1024 * 1024,
     RegistryClock? clock,
+    this.telemetry,
   }) : _engine = engine,
        _repository = repository,
        _clock = clock ?? DateTime.now {
@@ -33,6 +35,7 @@ final class WorkloadRegistry {
   final WorkloadRepository _repository;
   final RegistryClock _clock;
   final int maximumArtifactBytes;
+  final WasiTelemetry? telemetry;
   final Map<String, Future<WorkloadArtifact>> _registrations = {};
 
   Future<WorkloadArtifact> registerArtifact(Uint8List bytes) {
@@ -76,9 +79,24 @@ final class WorkloadRegistry {
     );
   }
 
-  Future<WorkloadRevision> activate(String workloadName, int revision) {
+  Future<WorkloadRevision> activate(String workloadName, int revision) async {
     _validateWorkloadName(workloadName);
-    return _repository.activate(workloadName, revision);
+    final stopwatch = Stopwatch()..start();
+    final correlationId = telemetry?.createCorrelationId() ?? '';
+    try {
+      final activated = await _repository.activate(workloadName, revision);
+      _record(correlationId, WasiLifecycleStage.activation, stopwatch, true);
+      return activated;
+    } on Object catch (error) {
+      _record(
+        correlationId,
+        WasiLifecycleStage.activation,
+        stopwatch,
+        false,
+        error,
+      );
+      rethrow;
+    }
   }
 
   Future<WorkloadRevision> rollback(String workloadName) {
@@ -100,6 +118,8 @@ final class WorkloadRegistry {
   }
 
   Future<WorkloadArtifact> _register(String artifactId, Uint8List bytes) async {
+    final stopwatch = Stopwatch()..start();
+    final correlationId = telemetry?.createCorrelationId() ?? '';
     try {
       final existing = await _repository.findArtifact(artifactId);
       if (existing != null) {
@@ -112,7 +132,7 @@ final class WorkloadRegistry {
       }
 
       final module = await _engine.compile(bytes);
-      return _repository.saveArtifact(
+      final artifact = await _repository.saveArtifact(
         WorkloadArtifact(
           id: artifactId,
           bytes: bytes,
@@ -122,9 +142,50 @@ final class WorkloadRegistry {
           exports: module.exports,
         ),
       );
+      _record(correlationId, WasiLifecycleStage.compile, stopwatch, true);
+      return artifact;
+    } on Object catch (error) {
+      _record(
+        correlationId,
+        WasiLifecycleStage.compile,
+        stopwatch,
+        false,
+        error,
+      );
+      rethrow;
     } finally {
       _registrations.remove(artifactId);
     }
+  }
+
+  void _record(
+    String correlationId,
+    WasiLifecycleStage stage,
+    Stopwatch stopwatch,
+    bool succeeded, [
+    Object? failure,
+  ]) {
+    stopwatch.stop();
+    if (correlationId.isEmpty) {
+      return;
+    }
+    telemetry?.recordEvent(
+      WasiLifecycleEvent(
+        correlationId: correlationId,
+        stage: stage,
+        elapsed: stopwatch.elapsed,
+        succeeded: succeeded,
+        failureKind: failure == null ? null : classifyWasiFailure(failure),
+      ),
+    );
+    telemetry?.recordMetric(
+      WasiMetric(
+        name: '${stage.name}.duration_ms',
+        value:
+            stopwatch.elapsedMicroseconds / Duration.microsecondsPerMillisecond,
+        correlationId: correlationId,
+      ),
+    );
   }
 }
 

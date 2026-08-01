@@ -1,5 +1,6 @@
 import '../artifacts/models.dart';
 import '../runtime/api.dart';
+import '../observability/telemetry.dart';
 
 typedef CompilationCacheClock = DateTime Function();
 
@@ -13,6 +14,7 @@ final class CompiledModuleCache {
     this.maximumEntries = 128,
     this.maximumCachedBytes = 64 * 1024 * 1024,
     CompilationCacheClock? clock,
+    this.telemetry,
   }) : _engine = engine,
        _clock = clock ?? DateTime.now {
     if (maximumEntries < 1) {
@@ -35,6 +37,7 @@ final class CompiledModuleCache {
   final CompilationCacheClock _clock;
   final int maximumEntries;
   final int maximumCachedBytes;
+  final WasiTelemetry? telemetry;
   final Map<_CacheKey, _CacheEntry> _entries = {};
   final Map<_CacheKey, Future<CompiledModule>> _compilations = {};
   int _cachedBytes = 0;
@@ -43,17 +46,71 @@ final class CompiledModuleCache {
   int get cachedBytes => _cachedBytes;
 
   /// Returns a compiled module, compiling concurrent cache misses only once.
-  Future<CompiledModule> getOrCompile(WorkloadArtifact artifact) {
+  Future<CompiledModule> getOrCompile(
+    WorkloadArtifact artifact, {
+    String correlationId = '',
+  }) {
     final key = _CacheKey(artifact.id, _engine.compatibility);
     final entry = _entries[key];
     if (entry != null) {
       entry.lastUsed = _now();
+      _record(correlationId, cacheHit: true, elapsed: Duration.zero);
       return Future.value(entry.module);
     }
 
     return _compilations.putIfAbsent(
       key,
-      () => _compileAndCache(key, artifact),
+      () => _compileWithTelemetry(key, artifact, correlationId),
+    );
+  }
+
+  Future<CompiledModule> _compileWithTelemetry(
+    _CacheKey key,
+    WorkloadArtifact artifact,
+    String correlationId,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final module = await _compileAndCache(key, artifact);
+      stopwatch.stop();
+      _record(correlationId, cacheHit: false, elapsed: stopwatch.elapsed);
+      return module;
+    } on Object catch (error) {
+      stopwatch.stop();
+      _record(
+        correlationId,
+        cacheHit: false,
+        elapsed: stopwatch.elapsed,
+        failure: error,
+      );
+      rethrow;
+    }
+  }
+
+  void _record(
+    String correlationId, {
+    required bool cacheHit,
+    required Duration elapsed,
+    Object? failure,
+  }) {
+    if (correlationId.isEmpty) {
+      return;
+    }
+    telemetry?.recordEvent(
+      WasiLifecycleEvent(
+        correlationId: correlationId,
+        stage: WasiLifecycleStage.cache,
+        elapsed: elapsed,
+        succeeded: failure == null,
+        failureKind: failure == null ? null : classifyWasiFailure(failure),
+      ),
+    );
+    telemetry?.recordMetric(
+      WasiMetric(
+        name: cacheHit ? 'cache.hit' : 'cache.miss',
+        value: 1,
+        correlationId: correlationId,
+      ),
     );
   }
 

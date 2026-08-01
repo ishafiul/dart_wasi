@@ -3,6 +3,7 @@ import 'dart:async';
 import '../artifacts/models.dart';
 import '../artifacts/registry.dart';
 import '../errors.dart';
+import '../observability/telemetry.dart';
 import 'compiled_module_cache.dart';
 import 'request_executor.dart';
 
@@ -27,6 +28,7 @@ abstract interface class WasiWorkloadExecutor {
     WasiRequest request, {
     Duration? timeout,
     WasiRequestCancellation? cancellation,
+    String correlationId = '',
   });
 }
 
@@ -39,11 +41,13 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
   WorkloadExecutor({
     required WorkloadRegistry registry,
     required CompiledModuleCache cache,
+    this.telemetry,
   }) : _registry = registry,
        _cache = cache;
 
   final WorkloadRegistry _registry;
   final CompiledModuleCache _cache;
+  final WasiTelemetry? telemetry;
   final Map<_RevisionKey, _DrainState> _draining = {};
   final Map<_RevisionKey, _RevisionLimiter> _limiters = {};
 
@@ -53,6 +57,7 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
     WasiRequest request, {
     Duration? timeout,
     WasiRequestCancellation? cancellation,
+    String correlationId = '',
   }) async {
     final revision = await _registry.activeRevision(workloadName);
     if (revision == null) {
@@ -78,6 +83,12 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
       () => _RevisionLimiter(revision.policy.maximumConcurrentRequests),
     );
     if (!limiter.tryAcquire()) {
+      _record(
+        correlationId,
+        WasiLifecycleStage.queue,
+        Duration.zero,
+        succeeded: false,
+      );
       return WorkloadExecutionResult(
         revision: revision,
         request: WasiRequestResult.rejected('Workload capacity is exhausted.'),
@@ -85,22 +96,87 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
     }
     final drainState = _draining.putIfAbsent(key, _DrainState.new)..start();
     try {
-      final module = await _cache.getOrCompile(artifact);
+      _record(
+        correlationId,
+        WasiLifecycleStage.queue,
+        Duration.zero,
+        succeeded: true,
+      );
+      final instantiation = Stopwatch()..start();
+      final module = await _cache.getOrCompile(
+        artifact,
+        correlationId: correlationId,
+      );
+      instantiation.stop();
+      _record(
+        correlationId,
+        WasiLifecycleStage.instantiate,
+        instantiation.elapsed,
+        succeeded: true,
+      );
+      final execution = Stopwatch()..start();
       final requestResult = await WasiRequestExecutor(module).execute(
         policyRequest,
         timeout: _effectiveTimeout(timeout, revision.policy.maximumWallTime),
         cancellation: cancellation,
         maximumOutputBytes: revision.policy.maximumOutputBytes,
       );
+      execution.stop();
+      _record(
+        correlationId,
+        WasiLifecycleStage.execute,
+        execution.elapsed,
+        succeeded: requestResult.isSuccess,
+        failure: requestResult.failure,
+      );
+      final stderr = requestResult.execution?.stderr;
+      if (stderr != null && stderr.isNotEmpty && correlationId.isNotEmpty) {
+        telemetry?.recordGuestStderr(correlationId, stderr);
+      }
       _releaseWhenSafe(limiter, drainState, key, requestResult);
       return WorkloadExecutionResult(
         revision: revision,
         request: requestResult,
       );
-    } on Object {
+    } on Object catch (error) {
+      _record(
+        correlationId,
+        WasiLifecycleStage.instantiate,
+        Duration.zero,
+        succeeded: false,
+        failure: error,
+      );
       _finish(limiter, drainState, key);
       rethrow;
     }
+  }
+
+  void _record(
+    String correlationId,
+    WasiLifecycleStage stage,
+    Duration elapsed, {
+    required bool succeeded,
+    Object? failure,
+  }) {
+    if (correlationId.isEmpty) {
+      return;
+    }
+    telemetry?.recordEvent(
+      WasiLifecycleEvent(
+        correlationId: correlationId,
+        stage: stage,
+        elapsed: elapsed,
+        succeeded: succeeded,
+        failureKind: failure == null ? null : classifyWasiFailure(failure),
+      ),
+    );
+    telemetry?.recordMetric(
+      WasiMetric(
+        name: '${stage.name}.duration_ms',
+        value: elapsed.inMicroseconds / Duration.microsecondsPerMillisecond,
+        correlationId: correlationId,
+      ),
+    );
   }
 
   void _releaseWhenSafe(

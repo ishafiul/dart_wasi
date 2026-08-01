@@ -154,6 +154,52 @@ void main() {
         expect((await first).status, 200);
       },
     );
+
+    test(
+      'correlates route-to-response telemetry and redacts guest logs',
+      () async {
+        final telemetry = WasiTelemetry(
+          maximumGuestLogBytes: 32,
+          redactions: [RegExp(r'token=[^\s]+')],
+        );
+        final dispatcher = await _dispatcher(
+          response: WasiHttpResponse(status: 200),
+          stderr: 'token=secret guest diagnostic'.codeUnits,
+          telemetry: telemetry,
+        );
+
+        final response = await dispatcher.dispatch(
+          hostname: 'api.example.test',
+          request: WasiHttpRequest(method: 'GET', path: '/v1'),
+          correlationId: 'request-42',
+        );
+
+        expect(response.status, 200);
+        expect(
+          telemetry.events
+              .where((event) => event.correlationId == 'request-42')
+              .map((event) => event.stage),
+          containsAll([
+            WasiLifecycleStage.route,
+            WasiLifecycleStage.queue,
+            WasiLifecycleStage.cache,
+            WasiLifecycleStage.instantiate,
+            WasiLifecycleStage.execute,
+          ]),
+        );
+        expect(
+          telemetry.metrics
+              .where((metric) => metric.correlationId == 'request-42')
+              .map((metric) => metric.name),
+          contains('route.duration_ms'),
+        );
+        expect(
+          telemetry.guestLogs.single.message,
+          '[REDACTED] guest diagnostic',
+        );
+        expect(telemetry.guestLogs.single.truncated, isFalse);
+      },
+    );
   });
 }
 
@@ -162,10 +208,12 @@ Future<WasiHttpDispatcher> _dispatcher({
   List<int>? stdout,
   int exitCode = 0,
   Object? error,
+  List<int> stderr = const [],
   bool pending = false,
   List<WasiHttpRoute>? routes,
   Future<WasiExecutionResult> Function(WasiExecutionOptions)? onRun,
   WasiCapabilityPolicy policy = const WasiCapabilityPolicy(),
+  WasiTelemetry? telemetry,
 }) async {
   final engine = _FakeEngine(
     onRun:
@@ -182,6 +230,7 @@ Future<WasiHttpDispatcher> _dispatcher({
               response ?? WasiHttpResponse(status: 200),
               stdout: stdout,
               exitCode: exitCode,
+              stderr: stderr,
             ),
           );
         },
@@ -189,6 +238,7 @@ Future<WasiHttpDispatcher> _dispatcher({
   final registry = WorkloadRegistry(
     engine: engine,
     repository: InMemoryWorkloadRepository(),
+    telemetry: telemetry,
   );
   final artifact = await registry.registerArtifact(Uint8List.fromList([1]));
   await registry.createRevision(
@@ -201,7 +251,8 @@ Future<WasiHttpDispatcher> _dispatcher({
   return WasiHttpDispatcher(
     executor: WorkloadExecutor(
       registry: registry,
-      cache: CompiledModuleCache(engine: engine),
+      cache: CompiledModuleCache(engine: engine, telemetry: telemetry),
+      telemetry: telemetry,
     ),
     routes:
         routes ??
@@ -212,19 +263,21 @@ Future<WasiHttpDispatcher> _dispatcher({
             workloadName: 'worker',
           ),
         ],
+    telemetry: telemetry,
   );
 }
 
 WasiExecutionResult _resultFor(
   WasiHttpResponse response, {
   List<int>? stdout,
+  List<int> stderr = const [],
   int exitCode = 0,
 }) => WasiExecutionResult(
   exitCode: exitCode,
   stdout: Uint8List.fromList(
     stdout ?? WasiHttpProtocol.encodeResponse(response),
   ),
-  stderr: Uint8List(0),
+  stderr: Uint8List.fromList(stderr),
 );
 
 final class _FakeEngine implements WasmEngine {
