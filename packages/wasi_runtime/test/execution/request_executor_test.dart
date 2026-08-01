@@ -72,6 +72,17 @@ void main() {
       expect(trapped.failure, isA<WasmTrap>());
     });
 
+    test('wraps unexpected engine failures in a stable result', () async {
+      final result = await WasiRequestExecutor(
+        _ErrorModule(),
+      ).execute(WasiRequest());
+
+      expect(result.status, WasiRequestStatus.failed);
+      expect(result.execution, isNull);
+      expect(result.failure, isA<WasmInstantiationException>());
+      expect(result.failure?.cause, isA<StateError>());
+    });
+
     test('returns cancellation before starting the engine', () async {
       final module = _RecordingModule();
       final cancellation = WasiRequestCancellation()..cancel();
@@ -141,6 +152,13 @@ final class _TrapModule extends _FakeModule {
   Future<WasiExecutionResult> runWasi([
     WasiExecutionOptions options = const WasiExecutionOptions(),
   ]) => Future<WasiExecutionResult>.error(const WasmTrap('guest trapped'));
+}
+
+final class _ErrorModule extends _FakeModule {
+  @override
+  Future<WasiExecutionResult> runWasi([
+    WasiExecutionOptions options = const WasiExecutionOptions(),
+  ]) => Future<WasiExecutionResult>.error(StateError('engine unavailable'));
 }
 
 final class _PendingModule extends _FakeModule {
