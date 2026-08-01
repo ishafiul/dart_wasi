@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../runtime/api.dart';
+import '../execution/capability_policy.dart';
 
 /// Immutable, content-addressed WebAssembly artifact and derived metadata.
 final class WorkloadArtifact {
@@ -35,10 +36,12 @@ final class WorkloadRevision {
     required this.revision,
     required this.artifactId,
     required this.createdAt,
+    this.policy = const WasiCapabilityPolicy(),
   });
 
   final String workloadName;
   final int revision;
   final String artifactId;
   final DateTime createdAt;
+  final WasiCapabilityPolicy policy;
 }

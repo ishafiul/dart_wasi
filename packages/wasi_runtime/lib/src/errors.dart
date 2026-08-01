@@ -49,6 +49,14 @@ final class WasiHttpProtocolException implements Exception {
   String toString() => 'WasiHttpProtocolException: $message';
 }
 
+/// Guest output exceeded the revision's bounded capture budget.
+final class WasiOutputLimitException extends WasmException {
+  const WasiOutputLimitException({required this.maximumBytes})
+    : super('Guest output exceeded the $maximumBytes byte limit.');
+
+  final int maximumBytes;
+}
+
 /// A WASI HTTP worker exited before producing a successful response.
 final class WasiHttpExecutionException implements Exception {
   const WasiHttpExecutionException({

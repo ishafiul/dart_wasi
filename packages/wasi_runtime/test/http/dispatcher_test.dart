@@ -93,7 +93,10 @@ void main() {
     );
 
     test('maps timeout and cancellation at the execution boundary', () async {
-      final pending = await _dispatcher(pending: true);
+      final pending = await _dispatcher(
+        pending: true,
+        policy: const WasiCapabilityPolicy(maximumConcurrentRequests: 2),
+      );
 
       final timedOut = await pending.dispatch(
         hostname: 'api.example.test',
@@ -162,6 +165,7 @@ Future<WasiHttpDispatcher> _dispatcher({
   bool pending = false,
   List<WasiHttpRoute>? routes,
   Future<WasiExecutionResult> Function(WasiExecutionOptions)? onRun,
+  WasiCapabilityPolicy policy = const WasiCapabilityPolicy(),
 }) async {
   final engine = _FakeEngine(
     onRun:
@@ -191,6 +195,7 @@ Future<WasiHttpDispatcher> _dispatcher({
     workloadName: 'worker',
     revision: 1,
     artifactId: artifact.id,
+    policy: policy,
   );
   await registry.activate('worker', 1);
   return WasiHttpDispatcher(

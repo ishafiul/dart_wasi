@@ -34,6 +34,7 @@ enum WasiRequestStatus {
   timedOut,
   cancelled,
   failed,
+  rejected,
 }
 
 /// Structured result of one request-scoped WASI execution.
@@ -43,6 +44,8 @@ final class WasiRequestResult {
     required this.elapsed,
     this.execution,
     this.failure,
+    this.rejectionReason,
+    required this.whenExecutionSettled,
   });
 
   final WasiRequestStatus status;
@@ -53,6 +56,22 @@ final class WasiRequestResult {
 
   /// The stable platform failure for trapped or otherwise failed requests.
   final WasmException? failure;
+
+  /// Human-readable policy reason when [status] is [WasiRequestStatus.rejected].
+  final String? rejectionReason;
+
+  /// Completes when the underlying engine invocation has settled.
+  ///
+  /// It can complete after a timeout or cancellation result because those are
+  /// host-boundary outcomes, not engine interruption.
+  final Future<void> whenExecutionSettled;
+
+  factory WasiRequestResult.rejected(String reason) => WasiRequestResult._(
+    status: WasiRequestStatus.rejected,
+    elapsed: Duration.zero,
+    rejectionReason: reason,
+    whenExecutionSettled: Future.value(),
+  );
 
   bool get isSuccess => status == WasiRequestStatus.completed;
 }
@@ -86,6 +105,7 @@ final class WasiRequestExecutor {
     WasiRequest request, {
     Duration? timeout,
     WasiRequestCancellation? cancellation,
+    int? maximumOutputBytes,
   }) async {
     if (timeout != null && timeout.isNegative) {
       throw ArgumentError.value(timeout, 'timeout', 'must not be negative');
@@ -93,16 +113,22 @@ final class WasiRequestExecutor {
 
     final stopwatch = Stopwatch()..start();
     if (cancellation?.isCancelled ?? false) {
-      return _cancelled(stopwatch);
+      return _cancelled(stopwatch, Future.value());
     }
 
     final options = WasiExecutionOptions(
       arguments: List<String>.from(request.arguments),
       environment: Map<String, String>.from(request.environment),
       stdin: Uint8List.fromList(request.stdin),
+      maximumOutputBytes: maximumOutputBytes,
+    );
+    final execution = _module.runWasi(options);
+    final settled = execution.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
     );
     final outcome = await _awaitBoundary(
-      _module.runWasi(options),
+      execution,
       timeout: timeout,
       cancellation: cancellation,
     );
@@ -115,18 +141,21 @@ final class WasiRequestExecutor {
             : WasiRequestStatus.exited,
         elapsed: stopwatch.elapsed,
         execution: result,
+        whenExecutionSettled: settled,
       ),
       _ExecutionOutcome(:final error?) when error is WasmTrap =>
         WasiRequestResult._(
           status: WasiRequestStatus.trapped,
           elapsed: stopwatch.elapsed,
           failure: error,
+          whenExecutionSettled: settled,
         ),
       _ExecutionOutcome(:final error?) when error is WasmException =>
         WasiRequestResult._(
           status: WasiRequestStatus.failed,
           elapsed: stopwatch.elapsed,
           failure: error,
+          whenExecutionSettled: settled,
         ),
       _ExecutionOutcome(:final error?) => WasiRequestResult._(
         status: WasiRequestStatus.failed,
@@ -135,6 +164,7 @@ final class WasiRequestExecutor {
           'The WASI request could not be executed.',
           cause: error,
         ),
+        whenExecutionSettled: settled,
       ),
       _ExecutionOutcome() => WasiRequestResult._(
         status: WasiRequestStatus.failed,
@@ -142,20 +172,23 @@ final class WasiRequestExecutor {
         failure: const WasmInstantiationException(
           'The WASI request completed without a result.',
         ),
+        whenExecutionSettled: settled,
       ),
       _TimeoutOutcome() => WasiRequestResult._(
         status: WasiRequestStatus.timedOut,
         elapsed: stopwatch.elapsed,
+        whenExecutionSettled: settled,
       ),
-      _CancellationOutcome() => _cancelled(stopwatch),
+      _CancellationOutcome() => _cancelled(stopwatch, settled),
     };
   }
 
-  WasiRequestResult _cancelled(Stopwatch stopwatch) {
+  WasiRequestResult _cancelled(Stopwatch stopwatch, Future<void> settled) {
     stopwatch.stop();
     return WasiRequestResult._(
       status: WasiRequestStatus.cancelled,
       elapsed: stopwatch.elapsed,
+      whenExecutionSettled: settled,
     );
   }
 }

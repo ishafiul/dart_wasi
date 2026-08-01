@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 
 import '../errors.dart';
+import '../execution/capability_policy.dart';
 import '../runtime/api.dart';
 import 'models.dart';
 import 'repository.dart';
@@ -54,6 +55,7 @@ final class WorkloadRegistry {
     required String workloadName,
     required int revision,
     required String artifactId,
+    WasiCapabilityPolicy policy = const WasiCapabilityPolicy(),
   }) async {
     _validateWorkloadName(workloadName);
     if (revision < 1) {
@@ -69,6 +71,7 @@ final class WorkloadRegistry {
         revision: revision,
         artifactId: artifactId,
         createdAt: _clock().toUtc(),
+        policy: policy,
       ),
     );
   }
