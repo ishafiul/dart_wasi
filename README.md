@@ -42,6 +42,7 @@ dart run examples/run_wasm.dart /tmp/subset.wasm
 
 dart run examples/run_guest_io.dart
 dart run examples/run_http_worker.dart
+dart run examples/http_api_server.dart
 ```
 
 `examples/run_guest_io.dart` demonstrates arguments, environment, stdin,
@@ -49,6 +50,11 @@ stdout, and stderr together. `examples/run_wasm.dart` runs an existing artifact
 with empty host inputs and writes captured guest output before the exit code.
 `examples/run_http_worker.dart` compiles a Dart `fetch` handler, sends a
 versioned request envelope through WASI, and decodes its JSON response.
+
+`examples/http_api_server.dart` runs a local multi-worker API at
+`http://localhost:8080`: `GET /health`, `POST /api/echo`, and `GET /api/info`.
+The route-specific workers live in `examples/http_api/`; they demonstrate JSON
+responses, a binary request-body echo, and a second JSON endpoint.
 
 ## Intended result
 
