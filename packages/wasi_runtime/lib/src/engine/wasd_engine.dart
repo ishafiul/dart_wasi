@@ -102,8 +102,7 @@ final class _WasdCompiledModule implements CompiledModule {
   Future<WasiExecutionResult> runWasi([
     WasiExecutionOptions options = const WasiExecutionOptions(),
   ]) async {
-    final stdout = BytesBuilder(copy: false);
-    final stderr = BytesBuilder(copy: false);
+    final output = _BoundedOutput(options.maximumOutputBytes);
     final wasi = wasd.WASI(
       args: List.unmodifiable(options.arguments),
       env: Map.unmodifiable(options.environment),
@@ -111,8 +110,8 @@ final class _WasdCompiledModule implements CompiledModule {
       preopens: Map.unmodifiable(options.preopens),
       files: Map.unmodifiable(options.files),
       returnOnExit: true,
-      stdoutSink: stdout.add,
-      stderrSink: stderr.add,
+      stdoutSink: output.addStdout,
+      stderrSink: output.addStderr,
       version: wasd.WASIVersion.preview1,
     );
 
@@ -121,10 +120,16 @@ final class _WasdCompiledModule implements CompiledModule {
         _module,
         wasi.imports,
       );
+      final exitCode = wasi.start(instance);
+      if (output.exceeded) {
+        throw WasiOutputLimitException(
+          maximumBytes: options.maximumOutputBytes!,
+        );
+      }
       return WasiExecutionResult(
-        exitCode: wasi.start(instance),
-        stdout: stdout.toBytes(),
-        stderr: stderr.toBytes(),
+        exitCode: exitCode,
+        stdout: output.stdout,
+        stderr: output.stderr,
       );
     } on wasd.LinkError catch (error) {
       throw WasmLinkException(error.message, cause: error);
@@ -138,6 +143,43 @@ final class _WasdCompiledModule implements CompiledModule {
         'The WASI command could not be instantiated or started.',
         cause: error,
       );
+    }
+  }
+}
+
+final class _BoundedOutput {
+  _BoundedOutput(this._maximumBytes);
+
+  final int? _maximumBytes;
+  final BytesBuilder _stdout = BytesBuilder(copy: false);
+  final BytesBuilder _stderr = BytesBuilder(copy: false);
+  int _writtenBytes = 0;
+  bool exceeded = false;
+
+  Uint8List get stdout => _stdout.toBytes();
+  Uint8List get stderr => _stderr.toBytes();
+
+  void addStdout(Uint8List bytes) => _add(_stdout, bytes);
+  void addStderr(Uint8List bytes) => _add(_stderr, bytes);
+
+  void _add(BytesBuilder destination, Uint8List bytes) {
+    final maximumBytes = _maximumBytes;
+    if (maximumBytes == null) {
+      destination.add(bytes);
+      return;
+    }
+    final remaining = maximumBytes - _writtenBytes;
+    if (remaining <= 0) {
+      exceeded = exceeded || bytes.isNotEmpty;
+      return;
+    }
+    final retained = bytes.length <= remaining ? bytes.length : remaining;
+    if (retained > 0) {
+      destination.add(Uint8List.sublistView(bytes, 0, retained));
+      _writtenBytes += retained;
+    }
+    if (retained != bytes.length) {
+      exceeded = true;
     }
   }
 }

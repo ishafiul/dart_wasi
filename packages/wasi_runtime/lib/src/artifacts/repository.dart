@@ -66,7 +66,8 @@ final class InMemoryWorkloadRepository implements WorkloadRepository {
     final revisions = _revisions.putIfAbsent(revision.workloadName, () => {});
     final existing = revisions[revision.revision];
     if (existing != null) {
-      if (existing.artifactId != revision.artifactId) {
+      if (existing.artifactId != revision.artifactId ||
+          existing.policy != revision.policy) {
         throw RevisionConflictException(
           revision.workloadName,
           revision.revision,

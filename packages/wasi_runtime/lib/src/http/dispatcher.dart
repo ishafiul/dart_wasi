@@ -124,6 +124,7 @@ final class WasiHttpDispatcher {
       WasiRequestStatus.completed => _decodeResponse(result),
       WasiRequestStatus.timedOut => _emptyResponse(504),
       WasiRequestStatus.cancelled => _emptyResponse(499),
+      WasiRequestStatus.rejected => _emptyResponse(503),
       WasiRequestStatus.exited ||
       WasiRequestStatus.trapped ||
       WasiRequestStatus.failed => _emptyResponse(502),

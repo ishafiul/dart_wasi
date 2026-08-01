@@ -45,6 +45,7 @@ final class WasiExecutionOptions {
     this.stdin = const [],
     this.preopens = const {},
     this.files = const {},
+    this.maximumOutputBytes,
   });
 
   final List<String> arguments;
@@ -52,6 +53,7 @@ final class WasiExecutionOptions {
   final List<int> stdin;
   final Map<String, String> preopens;
   final Map<String, Uint8List> files;
+  final int? maximumOutputBytes;
 }
 
 /// Result of running a WASI Preview 1 command module.

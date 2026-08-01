@@ -45,6 +45,7 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
   final WorkloadRegistry _registry;
   final CompiledModuleCache _cache;
   final Map<_RevisionKey, _DrainState> _draining = {};
+  final Map<_RevisionKey, _RevisionLimiter> _limiters = {};
 
   @override
   Future<WorkloadExecutionResult> execute(
@@ -62,21 +63,71 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
       throw ArtifactNotFoundException(revision.artifactId);
     }
 
+    final policyRequest = revision.policy.applyTo(request);
+    if (revision.policy.inputBytesFor(policyRequest) >
+        revision.policy.maximumInputBytes) {
+      return WorkloadExecutionResult(
+        revision: revision,
+        request: WasiRequestResult.rejected('Request input exceeds policy.'),
+      );
+    }
+
     final key = _RevisionKey(revision.workloadName, revision.revision);
+    final limiter = _limiters.putIfAbsent(
+      key,
+      () => _RevisionLimiter(revision.policy.maximumConcurrentRequests),
+    );
+    if (!limiter.tryAcquire()) {
+      return WorkloadExecutionResult(
+        revision: revision,
+        request: WasiRequestResult.rejected('Workload capacity is exhausted.'),
+      );
+    }
     final drainState = _draining.putIfAbsent(key, _DrainState.new)..start();
     try {
       final module = await _cache.getOrCompile(artifact);
-      final requestResult = await WasiRequestExecutor(
-        module,
-      ).execute(request, timeout: timeout, cancellation: cancellation);
+      final requestResult = await WasiRequestExecutor(module).execute(
+        policyRequest,
+        timeout: _effectiveTimeout(timeout, revision.policy.maximumWallTime),
+        cancellation: cancellation,
+        maximumOutputBytes: revision.policy.maximumOutputBytes,
+      );
+      _releaseWhenSafe(limiter, drainState, key, requestResult);
       return WorkloadExecutionResult(
         revision: revision,
         request: requestResult,
       );
-    } finally {
-      if (drainState.finish()) {
-        _draining.remove(key);
-      }
+    } on Object {
+      _finish(limiter, drainState, key);
+      rethrow;
+    }
+  }
+
+  void _releaseWhenSafe(
+    _RevisionLimiter limiter,
+    _DrainState drainState,
+    _RevisionKey key,
+    WasiRequestResult result,
+  ) {
+    if (result.status == WasiRequestStatus.timedOut ||
+        result.status == WasiRequestStatus.cancelled) {
+      result.whenExecutionSettled.whenComplete(
+        () => _finish(limiter, drainState, key),
+      );
+      return;
+    }
+    _finish(limiter, drainState, key);
+  }
+
+  void _finish(
+    _RevisionLimiter limiter,
+    _DrainState drainState,
+    _RevisionKey key,
+  ) {
+    limiter.release();
+    if (drainState.finish()) {
+      _draining.remove(key);
+      _limiters.remove(key);
     }
   }
 
@@ -88,6 +139,13 @@ final class WorkloadExecutor implements WasiWorkloadExecutor {
     final key = _RevisionKey(revision.workloadName, revision.revision);
     return _draining[key]?.whenDrained ?? Future.value();
   }
+}
+
+Duration _effectiveTimeout(Duration? requested, Duration maximum) {
+  if (requested == null || requested > maximum) {
+    return maximum;
+  }
+  return requested;
 }
 
 final class _RevisionKey {
@@ -123,5 +181,24 @@ final class _DrainState {
       return true;
     }
     return false;
+  }
+}
+
+final class _RevisionLimiter {
+  _RevisionLimiter(this._maximum);
+
+  final int _maximum;
+  int _active = 0;
+
+  bool tryAcquire() {
+    if (_active >= _maximum) {
+      return false;
+    }
+    _active++;
+    return true;
+  }
+
+  void release() {
+    _active--;
   }
 }
