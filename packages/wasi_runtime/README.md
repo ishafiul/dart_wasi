@@ -12,3 +12,9 @@ The package also owns the version 1 HTTP-over-WASI host contract:
 - A bounded `DWHP` binary envelope codec.
 - Stable protocol and guest-execution failures.
 - `CompiledModule.runHttp` for request-scoped execution with captured stderr.
+
+For generic command modules, `WasiRequestExecutor` creates a fresh WASI
+context for every `WasiRequest`, accepts only request-scoped stdin, arguments,
+and environment values, and returns a structured result for normal exit,
+traps, cancellation, and wall-clock timeout. Timeout and cancellation return at
+the host boundary; they cannot preempt an already-running in-process engine.

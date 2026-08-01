@@ -4,6 +4,7 @@ export 'src/artifacts/models.dart';
 export 'src/artifacts/registry.dart';
 export 'src/artifacts/repository.dart';
 export 'src/engine/wasd_engine.dart';
+export 'src/execution/request_executor.dart';
 export 'src/errors.dart';
 export 'src/http/executor.dart';
 export 'src/http/models.dart';
