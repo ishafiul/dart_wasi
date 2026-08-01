@@ -24,11 +24,12 @@ compiler, runtime, or platform.
 - `packages/dart_wasi`: minimal APIs available to Dart guest programs.
 - `packages/wasi_runtime`: Dart host and `wasd` integration.
 
-The compiler feasibility slice supports one intentionally tiny program shape:
-one `Wasi.stdout.write` call with a constant string in `void main()`. It emits
-a standard WASI Preview 1 module through `wasi_snapshot_preview1.fd_write`.
-The existing host can validate, inspect, version, and execute standard WASI
-modules.
+The compiler supports a deliberately restricted Dart subset with typed
+integers, booleans, opaque runtime bytes, direct functions, branches, loops,
+stdout, stderr, bounded stdin, arguments, environment lookup, and exit. It
+emits standard WASI Preview 1 command modules and imports only the capabilities
+used by each guest. The host can validate, inspect, version, and execute those
+modules with request-scoped input and captured output.
 
 ```shell
 dart run dart2wasi examples/hello.dart /tmp/hello.wasm
@@ -37,10 +38,13 @@ dart run examples/run_wasm.dart /tmp/hello.wasm
 
 dart run dart2wasi examples/subset.dart /tmp/subset.wasm
 dart run examples/run_wasm.dart /tmp/subset.wasm
+
+dart run examples/run_guest_io.dart
 ```
 
-`examples/run_wasm.dart` writes captured guest stdout and stderr before the
-guest exit code.
+`examples/run_guest_io.dart` demonstrates arguments, environment, stdin,
+stdout, and stderr together. `examples/run_wasm.dart` runs an existing artifact
+with empty host inputs and writes captured guest output before the exit code.
 
 ## Intended result
 
