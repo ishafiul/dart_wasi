@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented (minimal feasibility subset)
+Complete (minimal compiler feasibility milestone)
 
 ## Depends on
 
@@ -68,8 +68,21 @@ successfully invokes `_start` and writes the expected bytes.
 - Output is a core Wasm version 1 module, not Dart's browser WasmGC output.
 - The module imports only documented WASI Preview 1 functions.
 - Unsupported Dart syntax or libraries produce stable diagnostics.
-- The generated fixture also validates in an independent WASI runtime when
-  available.
+- The generated fixture validates in the independent Wasmtime CLI as part of
+  CI, asserting a zero exit code, exact stdout, and empty stderr.
+
+## Validation and milestone closure
+
+The compiler test suite has two execution paths: the existing `WasdEngine`
+test validates the project's adapter, while `wasmtime_integration_test.dart`
+executes a freshly generated module in Wasmtime. CI installs Wasmtime before
+running the suite, so the independent validation is required for every pull
+request. On developer machines without Wasmtime, only that integration test is
+skipped with an explicit message.
+
+This closes the minimal compiler feasibility milestone. Expanding the accepted
+Dart subset or replacing the restricted parser with a full Dart frontend is
+future work, not part of this milestone.
 
 ## Non-goals
 
