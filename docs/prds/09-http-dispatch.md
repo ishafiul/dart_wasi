@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Implemented
 
 ## Depends on
 
@@ -26,3 +26,14 @@ WASI Workers.
 - A Dart HTTP server routes to a Dart-authored Wasm Worker.
 - Missing routes, guest failures, invalid responses, and timeouts map to
   documented statuses.
+
+## Implementation
+
+- `WasiHttpDispatcher` routes case-insensitive hostnames and path prefixes to
+  active workloads through `WorkloadExecutor`, retaining its request isolation.
+- `WasiHttpServer` adapts the dispatcher to `dart:io`'s `HttpServer`.
+- Per-workload, fail-fast concurrency limits return `503`; aliases for the
+  same workload share the same limit.
+- Missing routes return `404`; guest exits, traps, failures, and malformed
+  worker responses return `502`; timeouts return `504`; and host-side request
+  cancellation returns `499`.
