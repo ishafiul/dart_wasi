@@ -1,0 +1,12 @@
+name: dart_wasi_host
+description: Local command-line host for Dart-authored WASI workers.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+resolution: workspace
+
+dependencies:
+  wasi_runtime: any

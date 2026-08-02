@@ -32,7 +32,7 @@ these workers; stderr remains available for diagnostics.
 Compile a guest with:
 
 ```shell
-dart run dart2wasi path/to/guest.dart path/to/guest.wasm
+dart run dart2wasi compile path/to/guest.dart -o path/to/guest.wasm
 ```
 
 This is not a general Dart compiler. It does not support `dart:io`, async,

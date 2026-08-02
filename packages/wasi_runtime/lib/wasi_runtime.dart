@@ -1,5 +1,6 @@
 library;
 
+export 'src/cli/host_cli.dart';
 export 'src/artifacts/models.dart';
 export 'src/artifacts/registry.dart';
 export 'src/artifacts/repository.dart';

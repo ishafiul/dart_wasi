@@ -10,6 +10,9 @@ environment:
 
 resolution: workspace
 
+executables:
+  dart_wasi_host: dart_wasi_host
+
 dependencies:
   crypto: ^3.0.7
   wasd:
