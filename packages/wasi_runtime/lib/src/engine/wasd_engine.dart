@@ -33,7 +33,7 @@ final class WasdEngine implements WasmEngine {
 
     try {
       final module = await wasd.WebAssembly.compile(ownedBytes.buffer);
-      return _WasdCompiledModule(module);
+      return _WasdCompiledModule(module, ownedBytes);
     } on wasd.CompileError catch (error) {
       throw WasmValidationException(error.message, cause: error);
     } on Object catch (error) {
@@ -46,9 +46,10 @@ final class WasdEngine implements WasmEngine {
 }
 
 final class _WasdCompiledModule implements CompiledModule {
-  _WasdCompiledModule(this._module)
-    : imports = List.unmodifiable(
-        wasd.Module.imports(_module).map(
+  _WasdCompiledModule(wasd.Module module, Uint8List bytes)
+    : _bytes = Uint8List.fromList(bytes),
+      imports = List.unmodifiable(
+        wasd.Module.imports(module).map(
           (descriptor) => WasmImport(
             module: descriptor.module,
             name: descriptor.name,
@@ -57,7 +58,7 @@ final class _WasdCompiledModule implements CompiledModule {
         ),
       ),
       exports = List.unmodifiable(
-        wasd.Module.exports(_module).map(
+        wasd.Module.exports(module).map(
           (descriptor) => WasmExport(
             name: descriptor.name,
             kind: _externalKind(descriptor.kind),
@@ -65,7 +66,7 @@ final class _WasdCompiledModule implements CompiledModule {
         ),
       );
 
-  final wasd.Module _module;
+  final Uint8List _bytes;
 
   @override
   final List<WasmImport> imports;
@@ -79,7 +80,7 @@ final class _WasdCompiledModule implements CompiledModule {
   }) async {
     try {
       final instance = await wasd.WebAssembly.instantiateModule(
-        _module,
+        await _freshModule(),
         _wasdImports(imports),
       );
       return _WasdInstance(instance);
@@ -117,7 +118,7 @@ final class _WasdCompiledModule implements CompiledModule {
 
     try {
       final instance = await wasd.WebAssembly.instantiateModule(
-        _module,
+        await _freshModule(),
         wasi.imports,
       );
       final exitCode = wasi.start(instance);
@@ -145,6 +146,11 @@ final class _WasdCompiledModule implements CompiledModule {
       );
     }
   }
+
+  /// `wasd` currently mutates module-owned execution data while instantiating
+  /// Preview 1 command modules. Recompile the immutable source bytes to keep
+  /// each request's memory and stdin decoder isolated.
+  Future<wasd.Module> _freshModule() => wasd.WebAssembly.compile(_bytes.buffer);
 }
 
 final class _BoundedOutput {

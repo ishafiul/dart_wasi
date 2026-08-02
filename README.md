@@ -52,7 +52,8 @@ with empty host inputs and writes captured guest output before the exit code.
 versioned request envelope through WASI, and decodes its JSON response.
 
 `examples/http_api_server.dart` runs a local multi-worker API at
-`http://localhost:8080`: `GET /health`, `POST /api/echo`, and `GET /api/info`.
+`http://localhost:8080` (or `http://127.0.0.1:8080`): `GET /health`,
+`POST /api/echo`, and `GET /api/info`.
 The route-specific workers live in `examples/http_api/`; they demonstrate JSON
 responses, a binary request-body echo, and a second JSON endpoint.
 

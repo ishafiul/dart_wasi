@@ -26,21 +26,23 @@ Future<void> main() async {
       cache: CompiledModuleCache(engine: engine),
     ),
     routes: [
-      WasiHttpRoute(
-        hostname: hostname,
-        pathPrefix: '/health',
-        workloadName: 'health',
-      ),
-      WasiHttpRoute(
-        hostname: hostname,
-        pathPrefix: '/api/echo',
-        workloadName: 'echo',
-      ),
-      WasiHttpRoute(
-        hostname: hostname,
-        pathPrefix: '/api/info',
-        workloadName: 'info',
-      ),
+      for (final host in const ['localhost', '127.0.0.1']) ...[
+        WasiHttpRoute(
+          hostname: host,
+          pathPrefix: '/health',
+          workloadName: 'health',
+        ),
+        WasiHttpRoute(
+          hostname: host,
+          pathPrefix: '/api/echo',
+          workloadName: 'echo',
+        ),
+        WasiHttpRoute(
+          hostname: host,
+          pathPrefix: '/api/info',
+          workloadName: 'info',
+        ),
+      ],
     ],
   );
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);

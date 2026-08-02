@@ -35,6 +35,24 @@ void main() {
         '{"service":"dart-wasi-http-api","version":1}',
       );
     });
+
+    test('a compiled worker accepts consecutive requests', () async {
+      final root = Directory.current.uri.resolve('../../');
+      final bytes = await const MinimalDartToWasiCompiler().compile(
+        root.resolve('examples/http_api/health.dart'),
+      );
+      final module = await const WasdEngine().compile(bytes);
+
+      final first = await module.runHttp(
+        WasiHttpRequest(method: 'GET', path: '/health'),
+      );
+      final second = await module.runHttp(
+        WasiHttpRequest(method: 'GET', path: '/health'),
+      );
+
+      expect(utf8.decode(first.response.body), '{"status":"ok"}');
+      expect(utf8.decode(second.response.body), '{"status":"ok"}');
+    });
   });
 }
 
